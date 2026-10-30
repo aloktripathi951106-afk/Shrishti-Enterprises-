@@ -1,0 +1,8 @@
+{
+  "name": "Remix Shrishti Enterprises - AI Predictive Operations \u0026 Infrastructure Platform",
+  "description": "Enterprise infrastructure and smart textile weaving platform for Shrishti Enterprises (Proprietor: Arun Tiwari, Medak, Telangana). Features real-time predictive health diagnostics, computer vision telemetry, and automated remediation workflows.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
