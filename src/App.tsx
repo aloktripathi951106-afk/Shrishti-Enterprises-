@@ -65,6 +65,7 @@ interface PlantAsset {
   subTitle: string;
   category: 'Circular Loom' | 'VFD Inverter Panel' | 'Power Supply & Calibration' | 'Yarn & Creel';
   image: string;
+  pdfUrl?: string;
   healthScore: number;
   nominalStatus: string;
   lastInspection: string;
@@ -92,6 +93,94 @@ interface RateItem {
   benchmarkUnit: string;
 }
 
+/**
+ * Normalizes static asset paths.
+ * In Vite and static hosts (Vercel, Cloud Run), /public is stripped from the served URL.
+ */
+export const resolveAsset = (path: string): string => {
+  if (!path) return '';
+  let clean = path.trim();
+  if (clean.startsWith('/public/')) {
+    clean = clean.replace('/public/', '/');
+  } else if (clean.startsWith('public/')) {
+    clean = '/' + clean.replace('public/', '');
+  }
+  return clean;
+};
+
+interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
+  fallbackType?: 'person' | 'seal' | 'machine' | 'document';
+  fallbackText?: string;
+}
+
+/**
+ * Resilient image renderer that automatically resolves paths and displays
+ * an elegant domain fallback badge if the file cannot be reached.
+ */
+function SafeImage({ src, alt, className, fallbackType, fallbackText, ...rest }: SafeImageProps) {
+  const [errorCount, setErrorCount] = useState<number>(0);
+  const [hasFailed, setHasFailed] = useState<boolean>(false);
+  const [loaded, setLoaded] = useState<boolean>(false);
+
+  const cleanPath = resolveAsset(src || '');
+
+  // Calculate URL to try (first absolute /assets/..., then relative ./assets/...)
+  const currentSrc = useMemo(() => {
+    if (!cleanPath) return '';
+    if (errorCount === 0) return cleanPath;
+    if (errorCount === 1) {
+      return cleanPath.startsWith('/') ? '.' + cleanPath : '/' + cleanPath;
+    }
+    return '';
+  }, [cleanPath, errorCount]);
+
+  if (hasFailed || !currentSrc) {
+    if (fallbackType === 'person') {
+      return (
+        <div className={`flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 to-indigo-950 text-cyan-400 p-3 select-none ${className}`}>
+          <div className="w-14 h-14 rounded-full bg-cyan-500/20 border-2 border-cyan-400/40 flex items-center justify-center font-bold text-lg text-cyan-200 shadow-inner">
+            AT
+          </div>
+          <span className="text-[11px] font-bold text-slate-100 mt-2">Arun Tiwari</span>
+          <span className="text-[9px] text-cyan-300 font-mono tracking-wide">Authorized Proprietor</span>
+        </div>
+      );
+    }
+    if (fallbackType === 'seal') {
+      return (
+        <div className={`flex flex-col items-center justify-center bg-slate-950 text-cyan-400 p-1 border border-cyan-500/40 select-none ${className}`}>
+          <ShieldCheck className="w-5 h-5 text-cyan-400" />
+          <span className="text-[7px] font-mono font-bold text-cyan-300 text-center uppercase tracking-tighter">SEAL</span>
+        </div>
+      );
+    }
+    return (
+      <div className={`flex flex-col items-center justify-center bg-slate-900/90 text-slate-400 p-3 text-center select-none ${className}`}>
+        <Cpu className="w-6 h-6 text-cyan-400/70 mb-1" />
+        <span className="text-[10px] font-mono text-slate-300 truncate max-w-full px-1">{fallbackText || alt || 'Plant Unit'}</span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={currentSrc}
+      alt={alt}
+      className={`${className} ${loaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300`}
+      onLoad={() => setLoaded(true)}
+      onError={() => {
+        if (errorCount < 1) {
+          setErrorCount((prev) => prev + 1);
+        } else {
+          setHasFailed(true);
+        }
+      }}
+      referrerPolicy="no-referrer"
+      {...rest}
+    />
+  );
+}
+
 const RATE_SCHEDULE: RateItem[] = [
   { id: 'rate-1', size: 'Size 12 to 16', classification: 'Standard Quality Production', ratePaisa: 0.0215, rateRupeeStr: '0.0215 Paisa (₹0.215 / mtr)', benchmarkUnit: '1,200 units' },
   { id: 'rate-2', size: 'Size 19 to 22', classification: 'Standard Quality Production', ratePaisa: 0.0225, rateRupeeStr: '0.0225 Paisa (₹0.225 / mtr)', benchmarkUnit: '1,200 units' },
@@ -106,7 +195,7 @@ const PLANT_ASSETS: PlantAsset[] = [
     title: 'Lohia Nova 6-HS Circular Weaving Loom',
     subTitle: 'Section B // Ring Assembly #04 (6-Shuttle Weft Matrix)',
     category: 'Circular Loom',
-    image: '/public/assets/aistudio/WhatsApp_Image_2026-10-13_at_12.04.34_a007a261.jpeg',
+    image: '/assets/aistudio/WhatsApp_Image_2026-10-13_at_12.04.34_a007a261.jpeg',
     healthScore: 97.4,
     nominalStatus: 'Continuous Weaving Nominal',
     lastInspection: '4 mins ago',
@@ -140,7 +229,7 @@ const PLANT_ASSETS: PlantAsset[] = [
     title: 'Mitsubishi Electric D700 VFD Array',
     subTitle: 'Control Cabinet 4U // Units 4U3, 4U4, 4U5 (25.05 Hz Inverter Bus)',
     category: 'VFD Inverter Panel',
-    image: '/public/assets/aistudio/WhatsApp_Image_2026-10-13_at_12.04.48_f5f2bf82.jpeg',
+    image: '/assets/aistudio/WhatsApp_Image_2026-10-13_at_12.04.48_f5f2bf82.jpeg',
     healthScore: 94.2,
     nominalStatus: 'Active Frequency Modulation',
     lastInspection: 'Just now',
@@ -166,7 +255,8 @@ const PLANT_ASSETS: PlantAsset[] = [
     title: 'DC Power Supply Calibration Unit DH1715A-5',
     subTitle: 'NABL Certified Lab Standard CC-3071 // 0-35V / 0-3A DC Bench',
     category: 'Power Supply & Calibration',
-    image: '/public/assets/aistudio/Final_Global_Calibration_Certificate_Generator_89f754e1.pdf',
+    image: '/assets/aistudio/WhatsApp_Image_2026-10-13_at_12.05.00_d46c687e.jpeg',
+    pdfUrl: '/assets/aistudio/Final_Global_Calibration_Certificate_Generator_89f754e1.pdf',
     healthScore: 99.8,
     nominalStatus: 'NABL Traceable (GC-074 Multimeter)',
     lastInspection: 'Today 08:30',
@@ -192,7 +282,7 @@ const PLANT_ASSETS: PlantAsset[] = [
     title: 'High-Density Bobbin Feed Tension Rig',
     subTitle: 'Circular Weft Supply Rack // 64 Bobbin Station (0.03% Wastage Guard)',
     category: 'Yarn & Creel',
-    image: '/public/assets/aistudio/WhatsApp_Image_2026-10-13_at_12.05.42_7efaa08b.jpeg',
+    image: '/assets/aistudio/WhatsApp_Image_2026-10-13_at_12.05.42_7efaa08b.jpeg',
     healthScore: 96.1,
     nominalStatus: 'Zero Tangling // High Uniformity',
     lastInspection: '12 mins ago',
@@ -248,7 +338,7 @@ export default function App() {
       output: [
         '✓ Connected to Shrishti Enterprises Plant (Proprietor: Arun Tiwari)',
         '✓ Telangana Commercial Reg SEA/MDK/ACL/PC/1405045/2026 validated',
-        '✓ GSTIN: 36AAPCS4050G1Z2 (State Code 36 - Telangana) active',
+        '✓ GSTIN: 36AYPPT5754R1Z3 (State Code 36 - Telangana) active',
         '✓ Mitsubishi D700 VFD Array link established on port 4U [25.05 Hz Locked]',
         '✓ AI Predictive Health Engine loaded with zero latency overhead',
       ],
@@ -283,6 +373,7 @@ export default function App() {
   // Interactive Modals
   const [inspectionAsset, setInspectionAsset] = useState<PlantAsset | null>(null);
   const [isLiveDemoModalOpen, setIsLiveDemoModalOpen] = useState<boolean>(false);
+  const [previewDoc, setPreviewDoc] = useState<{ title: string; subtitle: string; image: string; pdfUrl?: string } | null>(null);
   const [activeHeatmapLayer, setActiveHeatmapLayer] = useState<'thermal' | 'vibration' | 'stress'>('thermal');
   const [remediatingAnomId, setRemediatingAnomId] = useState<string | null>(null);
 
@@ -321,6 +412,7 @@ export default function App() {
         setCommandOpen(false);
         setInspectionAsset(null);
         setIsLiveDemoModalOpen(false);
+        setPreviewDoc(null);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -509,11 +601,11 @@ export default function App() {
     },
     {
       id: 'cmd-copy-gst',
-      name: 'Copy GSTIN: 36AAPCS4050G1Z2 (Shrishti Enterprises)',
+      name: 'Copy GSTIN: 36AYPPT5754R1Z3 (Shrishti Enterprises)',
       category: 'Contact',
       shortcut: 'G',
       action: () => {
-        copyToClipboard('36AAPCS4050G1Z2', 'GSTIN');
+        copyToClipboard('36AYPPT5754R1Z3', 'GSTIN');
       }
     },
     {
@@ -650,7 +742,7 @@ export default function App() {
           <span>+91 77949 85637</span>
         </a>
         <span className="hidden md:inline text-slate-500">|</span>
-        <span className="hidden md:inline text-slate-400">GSTIN: <span className="text-white">36AAPCS4050G1Z2</span></span>
+        <span className="hidden md:inline text-slate-400">GSTIN: <span className="text-white">36AYPPT5754R1Z3</span></span>
       </div>
 
       {/* 1. FLOATING GLASSMORPHIC PILL NAVBAR */}
@@ -660,11 +752,11 @@ export default function App() {
           {/* Brand Logo with Shrishti Stamp Seal */}
           <a href="#" className="flex items-center gap-2.5 shrink-0 group">
             <div className="w-8 h-8 rounded-full overflow-hidden border border-cyan-400/50 shadow-sm shadow-indigo-500/20 shrink-0 bg-slate-900 flex items-center justify-center">
-              <img
-                src="/public/assets/aistudio/WhatsApp_Image_2026-10-03_at_11.17.24_825f9f6c.jpeg"
+              <SafeImage
+                src="/assets/aistudio/WhatsApp_Image_2026-10-03_at_11.17.24_825f9f6c.jpeg"
                 alt="Shrishti Enterprises Seal"
                 className="w-full h-full object-cover group-hover:scale-110 transition-transform"
-                referrerPolicy="no-referrer"
+                fallbackType="seal"
               />
             </div>
             <div className="flex flex-col">
@@ -802,20 +894,20 @@ export default function App() {
             {/* Left: Proprietor Portrait & Seal */}
             <div className="lg:col-span-4 flex flex-col items-center text-center p-6 rounded-2xl bg-black/40 border border-white/10 space-y-4">
               <div className="relative">
-                <div className="w-40 h-48 rounded-2xl overflow-hidden border-2 border-cyan-400/40 shadow-xl shadow-cyan-500/10">
-                  <img
-                    src="/public/assets/aistudio/WhatsApp_Image_2026-10-14_at_18.08.39_1829544e.jpeg"
+                <div className="w-40 h-48 rounded-2xl overflow-hidden border-2 border-cyan-400/40 shadow-xl shadow-cyan-500/10 bg-slate-900">
+                  <SafeImage
+                    src="/assets/aistudio/WhatsApp_Image_2026-10-14_at_18.08.39_1829544e.jpeg"
                     alt="Arun Tiwari - Proprietor, Shrishti Enterprises"
                     className="w-full h-full object-cover object-top"
-                    referrerPolicy="no-referrer"
+                    fallbackType="person"
                   />
                 </div>
-                <div className="absolute -bottom-3 -right-3 w-14 h-14 rounded-full border-2 border-white/20 overflow-hidden shadow-lg bg-slate-900">
-                  <img
-                    src="/public/assets/aistudio/WhatsApp_Image_2026-10-03_at_11.17.24_825f9f6c.jpeg"
+                <div className="absolute -bottom-3 -right-3 w-14 h-14 rounded-full border-2 border-white/20 overflow-hidden shadow-lg bg-slate-900 flex items-center justify-center">
+                  <SafeImage
+                    src="/assets/aistudio/WhatsApp_Image_2026-10-03_at_11.17.24_825f9f6c.jpeg"
                     alt="Official Seal"
                     className="w-full h-full object-cover"
-                    referrerPolicy="no-referrer"
+                    fallbackType="seal"
                   />
                 </div>
               </div>
@@ -871,9 +963,9 @@ export default function App() {
                 <div className="p-4 rounded-xl bg-white/5 border border-white/10 relative group">
                   <div className="text-[11px] font-mono text-slate-400">Goods and Services Tax (GSTIN)</div>
                   <div className="text-base font-bold font-mono text-cyan-400 mt-1 flex items-center justify-between">
-                    <span>36AAPCS4050G1Z2</span>
+                    <span>36AYPPT5754R1Z3</span>
                     <button
-                      onClick={() => copyToClipboard('36AAPCS4050G1Z2', 'GSTIN')}
+                      onClick={() => copyToClipboard('36AYPPT5754R1Z3', 'GSTIN')}
                       className="text-slate-400 hover:text-white p-1 rounded hover:bg-white/10 cursor-pointer"
                     >
                       <Copy className="w-3.5 h-3.5" />
@@ -943,6 +1035,91 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Statutory Documents & Audit Records Gallery */}
+              <div className="pt-2">
+                <div className="text-[11px] font-mono text-cyan-400 font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Verified Statutory Records & Certificates (Click to inspect):</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <button
+                    onClick={() => {
+                      setPreviewDoc({
+                        title: 'Telangana Govt Certificate of Registration',
+                        subtitle: 'Form II · SEA/MDK/ACL/PC/1405045/2026 · ACL Siddipet',
+                        image: '/assets/aistudio/WhatsApp_Image_2026-10-03_at_11.58.57_188094a8.jpeg'
+                      });
+                      showToast('Opening Document', 'Form II Telangana Labour Registration Certificate.');
+                    }}
+                    className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-left transition-all cursor-pointer group flex flex-col justify-between"
+                  >
+                    <div className="flex items-center justify-between text-[10px] font-mono text-cyan-300">
+                      <span>Form II Reg</span>
+                      <Maximize2 className="w-3 h-3 group-hover:scale-125 transition-transform" />
+                    </div>
+                    <div className="text-[11px] font-semibold text-slate-200 mt-1 line-clamp-1">Telangana Labour Reg</div>
+                    <span className="text-[9px] text-emerald-400 font-mono mt-0.5">Verified Active</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setPreviewDoc({
+                        title: 'Official Tax Invoice Ledger',
+                        subtitle: '1,606,030 MTR Production · GSTIN: 36AYPPT5754R1Z3',
+                        image: '/assets/aistudio/Invoice__Image_2026-10-04_at_19.46.45_283fcaeb.jpeg'
+                      });
+                      showToast('Opening Document', 'Official Tax Invoice Ledger for 1,606,030 MTR.');
+                    }}
+                    className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-left transition-all cursor-pointer group flex flex-col justify-between"
+                  >
+                    <div className="flex items-center justify-between text-[10px] font-mono text-cyan-300">
+                      <span>Tax Invoice</span>
+                      <Maximize2 className="w-3 h-3 group-hover:scale-125 transition-transform" />
+                    </div>
+                    <div className="text-[11px] font-semibold text-slate-200 mt-1 line-clamp-1">1.6M MTR Ledger</div>
+                    <span className="text-[9px] text-cyan-400 font-mono mt-0.5">GST Reconciled</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setPreviewDoc({
+                        title: 'Job Work Quotation Agreement',
+                        subtitle: 'Quotation Ref SE/26-27/104 · 1,200 Units/Shift Benchmark',
+                        image: '/assets/aistudio/WhatsApp_Image_2026-10-03_at_11.58.40_f1b595a9.jpeg'
+                      });
+                      showToast('Opening Document', 'Loom Job Work Quotation Agreement.');
+                    }}
+                    className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-left transition-all cursor-pointer group flex flex-col justify-between"
+                  >
+                    <div className="flex items-center justify-between text-[10px] font-mono text-cyan-300">
+                      <span>Quotation</span>
+                      <Maximize2 className="w-3 h-3 group-hover:scale-125 transition-transform" />
+                    </div>
+                    <div className="text-[11px] font-semibold text-slate-200 mt-1 line-clamp-1">Tariff SE/104</div>
+                    <span className="text-[9px] text-amber-300 font-mono mt-0.5">0.03% Capped</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setPreviewDoc({
+                        title: 'NABL ISO/IEC 17025 Calibration Certificate',
+                        subtitle: 'Certificate CC-3071 · Standard GC-074 · Valid till Oct 2027',
+                        image: '/assets/aistudio/WhatsApp_Image_2026-10-13_at_12.05.00_d46c687e.jpeg',
+                        pdfUrl: '/assets/aistudio/Final_Global_Calibration_Certificate_Generator_89f754e1.pdf'
+                      });
+                      showToast('Opening Document', 'NABL ISO/IEC 17025 Lab Traceability Certificate.');
+                    }}
+                    className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-left transition-all cursor-pointer group flex flex-col justify-between"
+                  >
+                    <div className="flex items-center justify-between text-[10px] font-mono text-cyan-300">
+                      <span>NABL Lab Standard</span>
+                      <Maximize2 className="w-3 h-3 group-hover:scale-125 transition-transform" />
+                    </div>
+                    <div className="text-[11px] font-semibold text-slate-200 mt-1 line-clamp-1">CC-3071 Standard</div>
+                    <span className="text-[9px] text-indigo-300 font-mono mt-0.5">NPL Traceable</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1258,7 +1435,7 @@ export default function App() {
                 <div className="flex flex-wrap gap-1.5">
                   {[
                     'rebalance --vfd=4U5',
-                    'verify --gstin=36AAPCS4050G1Z2',
+                    'verify --gstin=36AYPPT5754R1Z3',
                     'remediate --auto',
                     'clear'
                   ].map((preset) => (
@@ -1433,7 +1610,7 @@ export default function App() {
                 <label className="flex items-center justify-between text-xs text-slate-300 cursor-pointer p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
                   <div>
                     <div className="font-semibold text-slate-200">Telangana GST & Invoice Ledger</div>
-                    <div className="text-[10px] text-slate-400">Reconciles GSTIN: 36AAPCS4050G1Z2</div>
+                    <div className="text-[10px] text-slate-400">Reconciles GSTIN: 36AYPPT5754R1Z3</div>
                   </div>
                   <input
                     type="checkbox"
@@ -1650,11 +1827,12 @@ export default function App() {
                   className="group rounded-xl overflow-hidden bg-white/5 border border-white/10 hover:border-cyan-500/40 transition-all cursor-pointer flex flex-col justify-between"
                 >
                   <div className="relative h-44 overflow-hidden bg-black/60">
-                    <img
+                    <SafeImage
                       src={asset.image}
                       alt={asset.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      referrerPolicy="no-referrer"
+                      fallbackType="machine"
+                      fallbackText={asset.title}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
                     
@@ -1898,7 +2076,7 @@ export default function App() {
           <div className="flex flex-wrap gap-4 font-mono text-xs">
             <div className="p-2 rounded-lg bg-white/5 border border-white/5">
               <span className="text-slate-500 block text-[10px]">GSTIN</span>
-              <span className="text-cyan-400 font-semibold">36AAPCS4050G1Z2</span>
+              <span className="text-cyan-400 font-semibold">36AYPPT5754R1Z3</span>
             </div>
             <div className="p-2 rounded-lg bg-white/5 border border-white/5">
               <span className="text-slate-500 block text-[10px]">REG NO</span>
@@ -2041,11 +2219,12 @@ export default function App() {
               
               {/* Image Viewport with interactive Heatmap / Defect Layer */}
               <div className="relative rounded-xl overflow-hidden border border-white/10 bg-black h-72 sm:h-80 flex items-center justify-center">
-                <img
+                <SafeImage
                   src={inspectionAsset.image}
                   alt={inspectionAsset.title}
                   className="w-full h-full object-contain"
-                  referrerPolicy="no-referrer"
+                  fallbackType="machine"
+                  fallbackText={inspectionAsset.title}
                 />
 
                 {/* Layer Overlay */}
@@ -2143,8 +2322,22 @@ export default function App() {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 border-t border-white/10 flex items-center justify-between text-xs font-mono text-slate-400">
-              <span>Shrishti Enterprises · Medak, Telangana</span>
+            <div className="p-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-slate-400">
+              <div className="flex items-center gap-3">
+                <span>Shrishti Enterprises · Medak, Telangana</span>
+                {inspectionAsset.pdfUrl && (
+                  <a
+                    href={inspectionAsset.pdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 transition-colors"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>View NABL CC-3071 PDF Certificate</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+              </div>
               <button
                 onClick={() => setInspectionAsset(null)}
                 className="px-4 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-200 transition-colors cursor-pointer"
@@ -2225,6 +2418,62 @@ export default function App() {
               >
                 Done
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 8.5 STATUTORY DOCUMENT LIGHTBOX MODAL */}
+      {previewDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
+          <div
+            className="w-full max-w-3xl glass-panel rounded-2xl shadow-2xl border border-white/20 overflow-hidden flex flex-col max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-white/10 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-slate-100">{previewDoc.title}</h3>
+                <p className="text-xs text-slate-400 font-mono">{previewDoc.subtitle}</p>
+              </div>
+              <button
+                onClick={() => setPreviewDoc(null)}
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto flex items-center justify-center bg-black/70 min-h-[300px]">
+              <SafeImage
+                src={previewDoc.image}
+                alt={previewDoc.title}
+                className="max-h-[65vh] w-auto object-contain rounded-lg border border-white/10 shadow-lg"
+                fallbackType="document"
+                fallbackText={previewDoc.title}
+              />
+            </div>
+
+            <div className="p-3 border-t border-white/10 bg-black/40 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+              <span className="text-slate-400">Authenticated Document · Shrishti Enterprises</span>
+              <div className="flex items-center gap-2">
+                {previewDoc.pdfUrl && (
+                  <a
+                    href={previewDoc.pdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download PDF</span>
+                  </a>
+                )}
+                <button
+                  onClick={() => setPreviewDoc(null)}
+                  className="px-4 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-200 transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
